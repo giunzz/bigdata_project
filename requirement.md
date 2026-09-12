@@ -76,5 +76,5 @@ data/bronze/building_metadata/
 data/bronze/weather_train/
 Phase 3,4 — BRONZE → SILVER
 ✅ DONE
-Phase 4 SILVER → GOLD -> process
- 
+Phase 4 SILVER → GOLD -> process (dang lam)
+
