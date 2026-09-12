@@ -62,3 +62,4 @@ Inside the project directory, simply run:
 ```bash
 uv sync
 ```
+![alt text](image.png)
