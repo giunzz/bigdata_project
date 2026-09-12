@@ -10,13 +10,15 @@ from pyspark.sql import functions as F
 
 
 # ============================================================
-# 1. Spark session
+# 1. Spark Session
 # ============================================================
 
 spark = (
     SparkSession.builder
     .appName("ASHRAE-Bronze-to-Silver")
-    .master("local[*]")
+    .master("local[4]")
+    .config("spark.driver.memory", "4g")
+    .config("spark.sql.shuffle.partitions", "8")
     .getOrCreate()
 )
 
@@ -43,7 +45,7 @@ SILVER_OUT = str(SILVER_DIR / "ashrae_joined")
 
 
 # ============================================================
-# 3. Read BRONZE
+# 3. Read Bronze
 # ============================================================
 
 train = spark.read.parquet(TRAIN_PATH)
@@ -52,19 +54,18 @@ weather = spark.read.parquet(WEATHER_PATH)
 
 print("\n===== BRONZE LOADED =====")
 
-print("Train schema:")
+print("\nTRAIN")
 train.printSchema()
 
-print("Building schema:")
+print("\nBUILDING")
 building.printSchema()
 
-print("Weather schema:")
+print("\nWEATHER")
 weather.printSchema()
 
 
 # ============================================================
-# 4. Select business columns
-#    Không mang metadata ingest vào bảng join chính
+# 4. Chọn business columns
 # ============================================================
 
 train = train.select(
@@ -97,60 +98,35 @@ weather = weather.select(
 
 
 # ============================================================
-# 5. Data quality / cleaning
+# 5. Basic cleaning
 # ============================================================
 
-# Những khóa này không được null
-train_clean = train.filter(
-    F.col("building_id").isNotNull()
-    & F.col("timestamp").isNotNull()
-    & F.col("meter").isNotNull()
-    & F.col("meter_reading").isNotNull()
+train_clean = (
+    train
+    .filter(F.col("building_id").isNotNull())
+    .filter(F.col("meter").isNotNull())
+    .filter(F.col("timestamp").isNotNull())
+    .filter(F.col("meter_reading").isNotNull())
+    .dropDuplicates(["building_id", "meter", "timestamp"])
 )
 
-building_clean = building.filter(
-    F.col("building_id").isNotNull()
-    & F.col("site_id").isNotNull()
+building_clean = (
+    building
+    .filter(F.col("building_id").isNotNull())
+    .filter(F.col("site_id").isNotNull())
+    .dropDuplicates(["building_id"])
 )
 
-weather_clean = weather.filter(
-    F.col("site_id").isNotNull()
-    & F.col("timestamp").isNotNull()
-)
-
-# Loại duplicate theo khóa nghiệp vụ
-train_clean = train_clean.dropDuplicates(
-    ["building_id", "meter", "timestamp"]
-)
-
-building_clean = building_clean.dropDuplicates(
-    ["building_id"]
-)
-
-weather_clean = weather_clean.dropDuplicates(
-    ["site_id", "timestamp"]
+weather_clean = (
+    weather
+    .filter(F.col("site_id").isNotNull())
+    .filter(F.col("timestamp").isNotNull())
+    .dropDuplicates(["site_id", "timestamp"])
 )
 
 
 # ============================================================
-# 6. Optional scope: electricity only
-# ============================================================
-
-# Nếu project chỉ phân tích điện năng thì bật dòng dưới:
-#
-# train_clean = train_clean.filter(F.col("meter") == 0)
-#
-# Nếu muốn giữ toàn bộ loại meter thì để nguyên.
-#
-# meter:
-# 0 = electricity
-# 1 = chilled water
-# 2 = steam
-# 3 = hot water
-
-
-# ============================================================
-# 7. Join train + building metadata
+# 6. Join train + building
 # ============================================================
 
 train_building = (
@@ -162,13 +138,11 @@ train_building = (
     )
 )
 
-print("\n===== AFTER TRAIN + BUILDING JOIN =====")
-train_building.printSchema()
+print("\n===== TRAIN + BUILDING JOIN DONE =====")
 
 
 # ============================================================
-# 8. Join weather
-#    Join key: site_id + timestamp
+# 7. Join weather
 # ============================================================
 
 silver = (
@@ -182,22 +156,27 @@ silver = (
 
 
 # ============================================================
-# 9. Feature cơ bản cho Silver
+# 8. Add time features
 # ============================================================
 
 silver = (
     silver
     .withColumn("hour", F.hour("timestamp"))
     .withColumn("day_of_week", F.dayofweek("timestamp"))
-    .withColumn("month", F.month("timestamp"))
     .withColumn("day_of_month", F.dayofmonth("timestamp"))
-    .withColumn("is_weekend",
-                F.when(F.dayofweek("timestamp").isin([1, 7]), 1).otherwise(0))
+    .withColumn("month", F.month("timestamp"))
+    .withColumn(
+        "is_weekend",
+        F.when(
+            F.dayofweek("timestamp").isin([1, 7]),
+            1
+        ).otherwise(0)
+    )
 )
 
 
 # ============================================================
-# 10. Data-quality report
+# 9. Sample + schema
 # ============================================================
 
 print("\n===== SILVER SAMPLE =====")
@@ -206,40 +185,29 @@ silver.show(10, truncate=False)
 print("\n===== SILVER SCHEMA =====")
 silver.printSchema()
 
-print("\n===== ROW COUNTS =====")
-
-train_count = train_clean.count()
-building_count = building_clean.count()
-weather_count = weather_clean.count()
-silver_count = silver.count()
-
-print("Train clean   :", train_count)
-print("Building clean:", building_count)
-print("Weather clean :", weather_count)
-print("Silver rows   :", silver_count)
-
 
 # ============================================================
-# 11. Check join quality
+# 10. Data Quality
 # ============================================================
 
-print("\n===== JOIN QUALITY =====")
+print("\n===== DATA QUALITY =====")
 
 silver.select(
-    F.sum(F.col("site_id").isNull().cast("int"))
-    .alias("missing_building_match"),
+    F.count("*").alias("total_rows"),
 
-    F.sum(F.col("air_temperature").isNull().cast("int"))
-    .alias("missing_air_temperature"),
+    F.sum(
+        F.col("site_id").isNull().cast("int")
+    ).alias("missing_building_join"),
 
-    F.sum(F.col("primary_use").isNull().cast("int"))
-    .alias("missing_primary_use")
+    F.sum(
+        F.col("air_temperature").isNull().cast("int")
+    ).alias("missing_air_temperature"),
+
+    F.sum(
+        F.col("primary_use").isNull().cast("int")
+    ).alias("missing_primary_use"),
 ).show()
 
-
-# ============================================================
-# 12. Missing-value summary
-# ============================================================
 
 print("\n===== WEATHER NULL SUMMARY =====")
 
@@ -254,7 +222,9 @@ weather_cols = [
 ]
 
 null_exprs = [
-    F.sum(F.col(c).isNull().cast("int")).alias(c)
+    F.sum(
+        F.col(c).isNull().cast("int")
+    ).alias(c)
     for c in weather_cols
 ]
 
@@ -262,7 +232,7 @@ silver.select(*null_exprs).show(truncate=False)
 
 
 # ============================================================
-# 13. Write SILVER
+# 11. Write Silver
 # ============================================================
 
 (
@@ -273,5 +243,6 @@ silver.select(*null_exprs).show(truncate=False)
 
 print("\n===== SILVER WRITE COMPLETE =====")
 print("Output ->", SILVER_OUT)
+
 
 spark.stop()
