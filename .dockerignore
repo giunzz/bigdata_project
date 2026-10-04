@@ -1,0 +1,12 @@
+.git
+__pycache__
+*.pyc
+.venv
+.phuc_env
+.bench_env
+data
+model
+results*
+runtime*
+checkpoints*
+*.zip
