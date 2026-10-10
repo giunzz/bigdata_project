@@ -1,0 +1,5 @@
+CHECKPOINT CRASH RECOVERY
+Batch: 9
+Output records: 1
+Result: PASS: Kafka record partition=1, offset=2421 was recovered and written to Parquet.
+Records: [{'building_id': 999997, 'kafka_partition': 1, 'kafka_offset': 2421, 'validation_status': 'VALID', 'meter_reading': 456.78}]

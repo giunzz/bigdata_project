@@ -1,13 +1,23 @@
+
 @echo off
+setlocal
 title Apache Kafka Server
-set "JAVA_HOME=C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot"
-set "PATH=%JAVA_HOME%\bin;%PATH%"
+
+REM Default installation path
+if not defined KAFKA_HOME set "KAFKA_HOME=C:\kafka"
+
+if not exist "%KAFKA_HOME%\bin\windows\kafka-server-start.bat" (
+    echo ERROR: Kafka not found at %KAFKA_HOME%
+    pause
+    exit /b 1
+)
 
 echo ============================================================
 echo   STARTING APACHE KAFKA (KRaft Mode)
-echo   Listening on: localhost:9092
+echo   Kafka directory: %KAFKA_HOME%
 echo ============================================================
 
-cd /d "D:\_SPKT\Year_4\Analyze_Big_Data\kafka"
-.\bin\windows\kafka-server-start.bat config\server.properties
+cd /d "%KAFKA_HOME%"
+call ".\bin\windows\kafka-server-start.bat" ".\config\server.properties"
+
 pause
