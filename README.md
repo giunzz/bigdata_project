@@ -1,4 +1,3 @@
-# Phần analytics và benchmark của Phúc
 
 Mã nguồn của Phạm Quang Phúc cho đề tài phân tích điện năng tòa nhà bằng
 Apache Spark. Module chuẩn bị dữ liệu Building Data Genome 2, huấn luyện
