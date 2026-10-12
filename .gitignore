@@ -17,3 +17,6 @@ artifacts/
 .env
 .env.*
 !.env.example
+/.venv-wsl
+/Document
+/setup
