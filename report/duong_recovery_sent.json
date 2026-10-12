@@ -1,0 +1,23 @@
+{
+  "test": "checkpoint_crash_recovery",
+  "spark_status_when_sent": "stopped",
+  "topic": "energy_raw",
+  "partition": 1,
+  "offset": 2421,
+  "sent_at_utc": "2026-10-10T18:51:29.129854+00:00",
+  "event": {
+    "building_id": 999997,
+    "site_id": 0,
+    "meter": 0,
+    "timestamp": "2016-01-02 00:00:00",
+    "meter_reading": 456.78,
+    "primary_use": "CHECKPOINT_RECOVERY_TEST",
+    "square_feet": 1000.0,
+    "floor_count": 1,
+    "air_temperature": 22.0,
+    "dew_temperature": 15.0,
+    "cloud_coverage": 2.0,
+    "sea_level_pressure": 1015.0,
+    "wind_speed": 3.0
+  }
+}
